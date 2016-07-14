@@ -10,11 +10,10 @@ struct header {
 
 
 struct assembled_chunk {
-
 	long unsigned int t0;
 	unsigned char *data;
 
-	assembled_chunk(long int t0);
+	assembled_chunk();
 
 	~assembled_chunk();
 
@@ -25,11 +24,10 @@ struct assembled_chunk {
 
 struct vdif_processor {
 
-	bool upch;
-	FILE *output;
-	vdif_processor(bool flag1, const char *filename);
+	bool is_running;
+	vdif_processor();
 	~vdif_processor();
-	void process_chunk(assembled_chunk *c);
+	void process_chunk(shared_ptr<assembled_chunk> c, int *intensity, int index, char &mask);
 
 };
 
@@ -38,33 +36,35 @@ struct vdif_processor {
 struct vdif_assembler {
 
 	int number_of_processors;
-	int start_index, end_index;
-	int bufsize;
+	int start_index, i_start_index, i_end_index, end_index;
+	int bufsize,i_bufsize;
 	int mode;
 	string source;
 	int port;
-	char *filelist_name;
-	
+	char *filelist_name;	
+
 	unsigned char *temp_buf;
 	unsigned char *data_buf;
 	struct header *header_buf;
-	queue<assembled_chunk*> chunks;
 	
+	int *intensity_buffer;
+	char intensity_buffer_mask;
+
 	vdif_processor **processors;
 	thread *processor_threads;
 	
-	vdif_assembler(const char *arg1, const char *arg2);
+	vdif_assembler(const char *arg1, const char *arg2, bool flag1);
 
 	~vdif_assembler();
 
 	int register_processor(vdif_processor *p);
 	int kill_processor(vdif_processor *p);
 	void run();
+	void intensity_streamformer();
 	void network_capture();
 	void read_from_disk();
 	void simulate();
 	void assemble_chunk();
-	assembled_chunk* get_chunk();
 	int is_full();
 	void vdif_read(unsigned char *data, int size);
 	void fill_missing(int n);
