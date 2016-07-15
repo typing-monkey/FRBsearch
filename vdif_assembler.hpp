@@ -27,7 +27,7 @@ struct vdif_processor {
 	bool is_running;
 	vdif_processor();
 	~vdif_processor();
-	void process_chunk(shared_ptr<assembled_chunk> c, int *intensity, int index, char &mask);
+	void process_chunk(shared_ptr<assembled_chunk> c, int *intensity, fftwf_complex *in, fftwf_complex *out, int index, char &mask);
 
 };
 
@@ -42,6 +42,8 @@ struct vdif_assembler {
 	string source;
 	int port;
 	char *filelist_name;	
+	
+	fftwf_complex **in, **out;	
 
 	unsigned char *temp_buf;
 	unsigned char *data_buf;
@@ -49,16 +51,16 @@ struct vdif_assembler {
 	
 	int *intensity_buffer;
 	char intensity_buffer_mask;
-
+	
 	vdif_processor **processors;
 	thread *processor_threads;
 	
-	vdif_assembler(const char *arg1, const char *arg2, bool flag1);
+	vdif_assembler(const char *arg1, const char *arg2, bool flag1, int n);
 
 	~vdif_assembler();
 
-	int register_processor(vdif_processor *p);
-	int kill_processor(vdif_processor *p);
+	//int register_processor(vdif_processor *p);
+	//int kill_processor(vdif_processor *p);
 	void run();
 	void intensity_streamformer();
 	void network_capture();

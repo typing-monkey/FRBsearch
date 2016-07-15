@@ -68,7 +68,7 @@ vdif_processor::~vdif_processor(){
 
 }
 
-void vdif_processor::process_chunk(shared_ptr<assembled_chunk> c, int *intensity, int index, char &mask) {
+void vdif_processor::process_chunk(shared_ptr<assembled_chunk> c, int *intensity, fftwf_complex *in, fftwf_complex *out, int index, char &mask) {
 	unique_lock<mutex> lk2(mtx2);
 	is_running = true;
 	lk2.unlock();
@@ -87,7 +87,7 @@ void vdif_processor::process_chunk(shared_ptr<assembled_chunk> c, int *intensity
 
 		int nintegrate = 8;
 		if (upch) {
-			upchannelize_square_sum(constants::chunk_size, constants::nfft, temp, p);
+			upchannelize_square_sum(constants::chunk_size, constants::nfft, temp, in, out, p);
 			nintegrate -= 4;
 		}
 		square_sum(temp, constants::chunk_size, nintegrate, intensity + i * constants::nsample_integrate);
@@ -107,8 +107,8 @@ void vdif_processor::process_chunk(shared_ptr<assembled_chunk> c, int *intensity
 }
 
 
-vdif_assembler::vdif_assembler(const char *arg1, const char *arg2, bool flag1){
-
+vdif_assembler::vdif_assembler(const char *arg1, const char *arg2, bool flag1, int n){
+	number_of_processors = n;
 	if (strcmp("network",arg1)==0) {
 		temp_buf = new unsigned char[constants::udp_packets * 1056];
 		mode = 0;
@@ -125,36 +125,50 @@ vdif_assembler::vdif_assembler(const char *arg1, const char *arg2, bool flag1){
 		cout << "Unsupported option." << endl;
 		exit(1);
 	}
+
+	in = new fftwf_complex *[number_of_processors];
+	out = new fftwf_complex *[number_of_processors];
+	for (int i = 0; i< number_of_processors; i++) {
+		in[i] = fftwf_alloc_complex(constants::nfft);
+		out[i] = fftwf_alloc_complex(constants::nfft);
+	}
+
 	if (flag1) {
-		upch = true;
-		fftwf_complex *in, *out;
-		in = fftwf_alloc_complex(constants::nfft);
-		out = fftwf_alloc_complex(constants::nfft);
-		p = fftwf_plan_dft_1d(constants::nfft, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
-		fftwf_free(in); fftwf_free(out);
+		upch = true;		
+		p = fftwf_plan_dft_1d(constants::nfft, in[0], out[0], FFTW_FORWARD, FFTW_MEASURE);
 	}
 	
-
-	processors = new vdif_processor *[constants::max_processors];
-	number_of_processors = 0;
+	number_of_processors = n;
+	processors = new vdif_processor *[number_of_processors];
+	vdif_processor p[number_of_processors];
+	for (int i = 0; i< number_of_processors; i++) {
+		processors[i] = &p[i];
+	}
 	data_buf = new unsigned char[constants::buffer_size * constants::nfreq];
 	header_buf = new struct header[constants::buffer_size];
 	bufsize = 0;
 	i_bufsize = 0;
 	i_start_index = 0; start_index = 0;
 	i_end_index = 0; end_index = 0;
-	processor_threads = new thread[constants::max_processors];
+	processor_threads = new thread[number_of_processors];
 	intensity_buffer = new int[constants::intensity_buffer_size];
 	intensity_buffer_mask = 0;
 
 }
 
 vdif_assembler::~vdif_assembler() {
+	
+	for (int i = 0; i < number_of_processors; i++) {
+		fftwf_free(in[i]);
+		fftwf_free(out[i]);
+	}
+
 	delete[] processors;
 	delete[] data_buf;
 	delete[] header_buf;
 }
 
+/*
 int vdif_assembler::register_processor(vdif_processor *p) {
 
 	if (number_of_processors < constants::max_processors) {
@@ -180,7 +194,7 @@ int vdif_assembler::kill_processor(vdif_processor *p) {
 	}
 	cout << "Unable to find this processor.";
 	return 0;
-}
+} */
 
 int vdif_assembler::is_full() {
 
@@ -269,7 +283,7 @@ void vdif_assembler::assemble_chunk() {
 		while (!assigned) { 
 			unique_lock<mutex> lk2(mtx2);
 			if (!processors[processor_index]->is_running) {
-				processor_threads[processor_index] = thread(&vdif_processor::process_chunk,processors[processor_index],c,intensity_buffer+i_end_index*constants::intensity_chunk_size,i_end_index,ref(intensity_buffer_mask));
+				processor_threads[processor_index] = thread(&vdif_processor::process_chunk,processors[processor_index],c,intensity_buffer+i_end_index*constants::intensity_chunk_size,in[processor_index],out[processor_index],i_end_index,ref(intensity_buffer_mask));
 				processor_threads[processor_index].detach();
 				assigned = true;
 				i_end_index = (i_end_index + 1) % constants::max_chunks;
