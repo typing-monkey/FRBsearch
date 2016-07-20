@@ -1,5 +1,10 @@
-CC:= g++ -g -mavx -std=c++11 -Wall -Wextra -O3
+include ./src/rf_pipelines/Makefile.local
+
+CFLAG:= -g -mavx -std=c++11 -O3
+
+all:test
+
+test: test.cpp vdif_assembler.hpp vdif_assembler.cpp square_sum.cpp upchannelize.cpp aro_stream.cpp
+	$(CPP) $(CPP_LFLAGS) -o $@ $< -lfftw3f -pthread -lrf_pipelines -lm
 
 
-test: test.cpp vdif_assembler.hpp vdif_assembler.cpp square_sum.cpp upchannelize.cpp
-	$(CC) -o test test.cpp -lfftw3f -pthread -lm

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 using namespace std;
+using namespace rf_pipelines;
 
 struct header {
 	long unsigned int t0;
@@ -42,7 +43,8 @@ struct vdif_assembler {
 	string source;
 	int port;
 	char *filelist_name;	
-	
+	int chunk_count;
+
 	fftwf_complex **in, **out;	
 
 	unsigned char *temp_buf;
@@ -54,7 +56,7 @@ struct vdif_assembler {
 	
 	vdif_processor **processors;
 	thread *processor_threads;
-	
+		
 	vdif_assembler(const char *arg1, const char *arg2, bool flag1, int n);
 
 	~vdif_assembler();
@@ -67,6 +69,7 @@ struct vdif_assembler {
 	void read_from_disk();
 	void simulate();
 	void assemble_chunk();
+	void get_intensity_chunk(int *buf);
 	int is_full();
 	void vdif_read(unsigned char *data, int size);
 	void fill_missing(int n);
