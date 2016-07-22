@@ -38,7 +38,7 @@ struct vdif_assembler {
 
 	int number_of_processors;
 	int start_index, i_start_index, i_end_index, end_index;
-	int bufsize,i_bufsize;
+	int bufsize;
 	int mode;
 	string source;
 	int port;

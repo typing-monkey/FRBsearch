@@ -15,6 +15,8 @@
 #include <fftw3.h>
 #include <rf_pipelines.hpp>
 
+#include "gaussian.cpp"
+
 #include "vdif_assembler.hpp"
 #include "square_sum.cpp"
 #include "upchannelize.cpp"
@@ -22,7 +24,7 @@
 using namespace std;
 using namespace rf_pipelines;
 
-mutex mtx,mtx2,mtx3,mtx4;
+mutex mtx,mtx2,mtx3;
 condition_variable cv,cv_chunk;
 fftwf_plan p;
 bool upch = false;
@@ -38,7 +40,7 @@ namespace constants{
 	const int max_chunks = 8;
 	const int max_processors = 10;
 	const int frame_per_second = 390625;
-	const unsigned int buffer_size = chunk_size * 3; //at most 8 chunk in buffer
+	const unsigned int buffer_size = chunk_size * 3; //at most 3 chunk in buffer
 	const int file_packets = 131072;
 	const int udp_packets = 32;
 	const int nfft = 16;
@@ -77,18 +79,10 @@ void vdif_processor::process_chunk(shared_ptr<assembled_chunk> c, int *intensity
 	is_running = true;
 	lk2.unlock();
 	cout << c->t0 << endl;
+
 	unsigned char temp[constants::chunk_size];
 	
 	for (int i = 0; i < constants::nfreq; i++) {
-		/*
-		for (int j = 0; j < (constants::chunk_size) >> 1; j++) {
-			//cout << i+((constants::nfreq*j)<<1) << endl;
-			temp[j] = c->data[i + ((constants::nfreq*j) << 1)];
-		}
-		for (int j = 0; j < (constants::chunk_size) >> 1; j++) {
-			//cout << j+(constants::chunk_size>>1) << " " << i+((constants::nfreq*j) << 1) + constants::nfreq << endl;
-			temp[j+(constants::chunk_size>>1)] = c->data[i + ((constants::nfreq*j) << 1) + constants::nfreq];
-		}*/
 		
 		for (int j = 0; j < constants::chunk_size; j++) {
 			temp[j] = c->data[i + constants::nfreq*j];
@@ -99,10 +93,12 @@ void vdif_processor::process_chunk(shared_ptr<assembled_chunk> c, int *intensity
 			upchannelize_square_sum(constants::chunk_size, constants::nfft, temp, in, out, p);
 			nintegrate -= 4;
 		}
-		square_sum(temp, constants::chunk_size, nintegrate, intensity + i * constants::nsample_integrate);
+		square_sum(temp, constants::chunk_size, nintegrate, intensity + i * (constants::intensity_chunk_size / constants::nfreq));
 			
-	}
+	} 
 	
+	//gaussian_number(intensity, 1024*1024);
+
 	cout << "Processing chunk done." << endl;
 
 	unique_lock<mutex> lk3(mtx3);
@@ -158,7 +154,7 @@ vdif_assembler::vdif_assembler(const char *arg1, const char *arg2, bool flag1, i
 	data_buf = new unsigned char[constants::buffer_size * constants::nfreq];
 	header_buf = new struct header[constants::buffer_size];
 	bufsize = 0;
-	i_bufsize = 0;
+	chunk_count = 0;
 	i_start_index = 0; start_index = 0;
 	i_end_index = 0; end_index = 0;
 	processor_threads = new thread[number_of_processors];
@@ -178,6 +174,7 @@ vdif_assembler::~vdif_assembler() {
 	delete[] data_buf;
 	delete[] header_buf;
 }
+
 
 /*
 int vdif_assembler::register_processor(vdif_processor *p) {
@@ -243,26 +240,17 @@ void vdif_assembler::intensity_streamformer() {
 	}
 
 	for (;;) {
-		unique_lock<mutex> lk4(mtx4);
-		if (i_bufsize) {
-			unique_lock<mutex> lk3(mtx3);
-			if (intensity_buffer_mask & (1 << i_start_index)) {
-				if (write_to_disk) {
-					fwrite(intensity_buffer + i_start_index * constants::intensity_chunk_size, sizeof(int), constants::intensity_chunk_size, output);
-					intensity_buffer_mask = intensity_buffer_mask ^ (1 << i_start_index);
-					cout << "Writing chunk " << chunk_count << " to test.dat..." << endl;
-				} else {
-					
-					
-			
-				}
-				memset(intensity_buffer + i_start_index * constants::intensity_chunk_size, 0 ,constants::intensity_chunk_size * 4);
-				i_start_index = (i_start_index + 1) % constants::max_chunks;
-				i_bufsize--;
-			}
-			lk3.unlock();
+		
+		unique_lock<mutex> lk3(mtx3);
+		if (intensity_buffer_mask & (1 << i_start_index)) {
+			fwrite(intensity_buffer + i_start_index * constants::intensity_chunk_size, sizeof(int), constants::intensity_chunk_size, output);
+			intensity_buffer_mask = intensity_buffer_mask ^ (1 << i_start_index);
+			cout << "Writing chunk " << chunk_count << " to test.dat..." << endl;
+			memset(intensity_buffer + i_start_index * constants::intensity_chunk_size, 0 ,constants::intensity_chunk_size * 4);
+			i_start_index = (i_start_index + 1) % constants::max_chunks;
+			chunk_count++;
 		}
-		lk4.unlock();
+		lk3.unlock();
 	}
 	fclose(output);
 }
@@ -328,9 +316,6 @@ void vdif_assembler::assemble_chunk() {
 				processor_threads[processor_index].detach();
 				assigned = true;
 				i_end_index = (i_end_index + 1) % constants::max_chunks;
-				//unique_lock<mutex> lk4(mtx4);
-				//i_bufsize ++;
-				//lk4.unlock();
 				
 			} else {
 				processor_index++;
@@ -518,7 +503,7 @@ void vdif_assembler::vdif_read(unsigned char *data, int size) {
 		}
 		end_index = (end_index + 1) % constants::buffer_size;
 		bufsize++;
-		
+	
 		if (bufsize >= constants::chunk_size) {
 			cv.notify_one();
 		}
@@ -544,5 +529,6 @@ void vdif_assembler::fill_missing(int n) {
 	}
 	
 }
+
 
 	

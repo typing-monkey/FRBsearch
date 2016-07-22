@@ -32,7 +32,8 @@ public:
 		
 		run_state.start_substream(0.0);
 		thread main_t(&vdif_assembler::run, assembler);
-		for (;;) {	
+		
+		for (int count = 0; count < 16; count ++) {	
 			float *intensity;
 			float *weights;
 			ssize_t stride;
