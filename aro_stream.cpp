@@ -26,14 +26,16 @@ public:
 		buf = new int[nfreq * nt_maxwrite];
 	}
 	
-	~aro_stream() {}
+	~aro_stream() {
+		delete[] buf;
+	}
 	
 	virtual void stream_body(wi_run_state &run_state) override {
 		
 		run_state.start_substream(0.0);
 		thread main_t(&vdif_assembler::run, assembler);
-		
-		for (int count = 0; count < 16; count ++) {	
+			
+		for (int count = 0; count < 24; count ++) {	
 			float *intensity;
 			float *weights;
 			ssize_t stride;
@@ -56,6 +58,7 @@ public:
 					
 		}
 		run_state.end_substream();
+		
 		main_t.join();
 	}
 

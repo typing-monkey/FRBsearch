@@ -1,4 +1,5 @@
 #include "aro_stream.cpp"
+#include <sched.h>
 
 using namespace std;
 
@@ -7,8 +8,9 @@ int main(int argc, char *argv[]) {
 		cout << "run with:test <network/disk/simulate> <port/filelist> <-u/-nu>" << endl;
 		exit(10);
 	}
-
-	int n = 12;
+	
+	
+	int n = 3;
 	bool up = false;
 	
 	int nfreq = 1024;
@@ -29,6 +31,7 @@ int main(int argc, char *argv[]) {
 	string bonsai_output_filename = "bonsai_outputs.hdf5";	
 
 	transform_list.push_back(make_bonsai_dedisperser(bonsai_config_filename,bonsai_output_filename));
+	
 	stream->run(transform_list);
 
 	//vdif_assembler a(argv[1],argv[2],up,n);

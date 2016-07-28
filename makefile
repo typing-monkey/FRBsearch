@@ -1,6 +1,6 @@
 include ./src/rf_pipelines/Makefile.local
 
-CFLAG:= -g -mavx -std=c++11 -O3
+CFLAG:= -ggdb -mavx -std=c++11 -O3
 
 all:test
 

@@ -14,15 +14,19 @@
 #include <condition_variable>
 #include <fftw3.h>
 #include <rf_pipelines.hpp>
-
-#include "gaussian.cpp"
+#include <sys/time.h>
+#include <chrono>
+//#include "gaussian.cpp"
 
 #include "vdif_assembler.hpp"
 #include "square_sum.cpp"
 #include "upchannelize.cpp"
+#include <assert.h>
 
 using namespace std;
 using namespace rf_pipelines;
+
+auto start = chrono::steady_clock::now();
 
 mutex mtx,mtx2,mtx3;
 condition_variable cv,cv_chunk;
@@ -36,56 +40,64 @@ namespace constants{
 
 	const int nfreq = 1024;
 	const int header_size = 12; //int64 time + int32 thread ID
-	const int chunk_size = 65536*8;
+	const int chunk_size = 1024 * 384 * 2;
 	const int max_chunks = 8;
 	const int max_processors = 10;
 	const int frame_per_second = 390625;
-	const unsigned int buffer_size = chunk_size * 3; //at most 3 chunk in buffer
+	const unsigned int buffer_size = 819200; //
 	const int file_packets = 131072;
 	const int udp_packets = 32;
 	const int nfft = 16;
-	const int nsample_integrate = 512;
+	const int nsample_integrate = 16*24*2;
 	const int intensity_chunk_size = (int) chunk_size / nsample_integrate * nfreq;
 	const int intensity_buffer_size = intensity_chunk_size * max_chunks;
 }
 
 
-assembled_chunk::assembled_chunk() {
-	
+assembled_chunk::assembled_chunk() : t0(0) {
+
 	data = new unsigned char[constants::chunk_size * constants::nfreq];
-	t0 = 0;
 
 }
+
+void assembled_chunk::set_time(long unsigned int time) {
+	t0 = time;
+}
+
+void assembled_chunk::set_data(int i, unsigned char x) {
+	//assert(i < constants::chunk_size * constants::nfreq);
+	//assert(i >= 0);
+	data[i] = x;
+}
+
 
 assembled_chunk::~assembled_chunk() {
 	delete[] data;
 }
 
-void assembled_chunk::set_data(int i, unsigned char x) {
-	data[i] = x;
-}
-
 vdif_processor::vdif_processor(){
 	is_running = false;
 
+	processor_chunk = new assembled_chunk();
+	temp = new unsigned char[constants::chunk_size];
 }
 
 vdif_processor::~vdif_processor(){
-
+	delete processor_chunk;
+	delete[] temp;
 }
 
-void vdif_processor::process_chunk(shared_ptr<assembled_chunk> c, int *intensity, fftwf_complex *in, fftwf_complex *out, int index, char &mask) {
+void vdif_processor::process_chunk(int *intensity, fftwf_complex *in, fftwf_complex *out, int index, char &mask) {
+	
 	unique_lock<mutex> lk2(mtx2);
 	is_running = true;
 	lk2.unlock();
-	cout << c->t0 << endl;
-
-	unsigned char temp[constants::chunk_size];
+	cout << processor_chunk->t0 << endl;
 	
-	for (int i = 0; i < constants::nfreq; i++) {
+	for(int i = 0; i < constants::nfreq; i++) {
 		
 		for (int j = 0; j < constants::chunk_size; j++) {
-			temp[j] = c->data[i + constants::nfreq*j];
+			temp[j] = processor_chunk->data[i + constants::nfreq*j];
 		}
 
 		int nintegrate = 9;
@@ -144,13 +156,15 @@ vdif_assembler::vdif_assembler(const char *arg1, const char *arg2, bool flag1, i
 		upch = true;		
 		p = fftwf_plan_dft_1d(constants::nfft, in[0], out[0], FFTW_FORWARD, FFTW_MEASURE);
 	}
+
 	
 	number_of_processors = n;
 	processors = new vdif_processor *[number_of_processors];
-	vdif_processor p[number_of_processors];
+
 	for (int i = 0; i< number_of_processors; i++) {
-		processors[i] = &p[i];
+		processors[i] = new vdif_processor();
 	}
+
 	data_buf = new unsigned char[constants::buffer_size * constants::nfreq];
 	header_buf = new struct header[constants::buffer_size];
 	bufsize = 0;
@@ -268,6 +282,8 @@ void vdif_assembler::get_intensity_chunk(int *buf) {
 			}	
 
 			intensity_buffer_mask = intensity_buffer_mask ^ (1 << i_start_index);
+			cout << chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now() - start).count() << "ms" <<endl;
+			start = chrono::steady_clock::now();
 			lk3.unlock();
 			cout << "Finish assembling chunk " << i_start_index << ", sending to bonsai..." << endl;
 			i_start_index = (i_start_index + 1) % constants::max_chunks;
@@ -281,7 +297,10 @@ void vdif_assembler::get_intensity_chunk(int *buf) {
 }
 
 void vdif_assembler::assemble_chunk() {
-	
+
+	int p_index;
+	bool assigned;
+
 	for (;;) {
 
 		//cout << " start: " << start_index << " end: " << end_index << endl;
@@ -292,38 +311,34 @@ void vdif_assembler::assemble_chunk() {
 		}
 		
 		cout << "Chunk found" << endl;
-		shared_ptr<assembled_chunk> c = make_shared<assembled_chunk>();
-		//cout << header_buf[start_index].t0 << endl;
-		c->t0 = header_buf[start_index].t0;	
-		bool assigned = false;
-		int processor_index = 0;
+		assigned = false;
+		p_index = 0;
 
-		for (int i = 0; i < constants::chunk_size * constants::nfreq; i++) {
-			c->set_data(i, data_buf[start_index*constants::nfreq+i]);
-		}
-		
-		start_index = (start_index + constants::chunk_size) % constants::buffer_size;
-		bufsize -= constants::chunk_size;
-		cout << "excess: " << bufsize << endl;
-
-		
-		
 		while (!assigned) { 
 			unique_lock<mutex> lk2(mtx2);
-			if (!processors[processor_index]->is_running) {
-				
-				processor_threads[processor_index] = thread(&vdif_processor::process_chunk,processors[processor_index],c,intensity_buffer+i_end_index*constants::intensity_chunk_size,in[processor_index],out[processor_index],i_end_index,ref(intensity_buffer_mask));
-				processor_threads[processor_index].detach();
+			if (!processors[p_index]->is_running) {
+
+				processors[p_index]->processor_chunk->set_time(header_buf[start_index].t0);
+
+				for (int i = 0; i < constants::chunk_size * constants::nfreq; i++) {
+					processors[p_index]->processor_chunk->set_data(i,data_buf[start_index*constants::nfreq+i]);
+				}
+				start_index = (start_index + constants::chunk_size) % constants::buffer_size;
+				bufsize -= constants::chunk_size;
+				cout << "Assigned to processor: " << p_index << " excess: " << bufsize << endl; 	
+
+				processor_threads[p_index] = thread(&vdif_processor::process_chunk,processors[p_index],intensity_buffer+i_end_index*constants::intensity_chunk_size,in[p_index],out[p_index],i_end_index,ref(intensity_buffer_mask));
+				processor_threads[p_index].detach();
 				assigned = true;
 				i_end_index = (i_end_index + 1) % constants::max_chunks;
 				
 			} else {
-				processor_index++;
+				p_index++;
 			}
 			lk2.unlock();
-			if (processor_index == number_of_processors) {
+			if (p_index == number_of_processors) {
 				cout << "All processors are busy. Waiting for them to finish..." << endl;
-				processor_index = 0;
+				p_index = 0;
 			}
 
 			
@@ -356,6 +371,7 @@ void vdif_assembler::network_capture() {
 		if (read(sock_fd, temp_buf, size) == size) {
 			unique_lock<mutex> lk(mtx);
 			if (!is_full()) {
+				//if (rand() % 2 == 1)
 				vdif_read(temp_buf, size);
 			}
 			else {
@@ -412,7 +428,7 @@ void vdif_assembler::simulate() {
 		//int start_frame = rand() % (constants::frame_per_second - 2000);
 		//start_frame = 1000;
 		//cout << duration << " " << start_frame << endl;
-		for (int frame = 0; frame < constants::frame_per_second; frame++) {
+		for (int frame = 0; frame < constants::frame_per_second; frame+=2) {
 			unsigned char voltage = 136;
 			//if ((frame > start_frame) && (frame < start_frame+duration)) {
 				//cout << "pulse!" << endl;
@@ -461,7 +477,7 @@ void vdif_assembler::vdif_read(unsigned char *data, int size) {
 	long int t0 = 0;
 	int pol = 0;
 	int nmissing = 0;
-	long int current,expect = 0;
+	long int current,expect;
 	bool invalid;
 	
 	while ((count < size) && (!is_full())) {
@@ -481,18 +497,22 @@ void vdif_assembler::vdif_read(unsigned char *data, int size) {
 		pol = (word[3] >> 16) & 0x3FF;
 		
 		current = t0 * 2 + pol;
-
-		if (expect) {
-			nmissing = (int) (current - expect);
+		int prev = (end_index - 1) % constants::buffer_size;
+		expect = header_buf[prev].t0 * 2 + header_buf[prev].polarization + 1;
+		//cout << current << " " << expect << endl;
+		if (expect!=1) {
+			//nmissing = (int) (current - expect);
 		}
 
 		if (nmissing) {
+			
+			cout << "Missing "<< nmissing << " packets." << endl;
 			cout << "current: " << current << " expect: " << expect << endl; 
 			cout << "start: " << start_index << " end: " << end_index << endl;
 			fill_missing(nmissing);
 		}
 
-		expect = current + 1;
+		//expect = current + 1;
 		
 		header_buf[end_index].t0 = t0;
 		header_buf[end_index].polarization = pol;

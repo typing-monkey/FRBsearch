@@ -11,13 +11,15 @@ struct header {
 
 
 struct assembled_chunk {
+
 	long unsigned int t0;
 	unsigned char *data;
 
 	assembled_chunk();
 
 	~assembled_chunk();
-
+	
+	void set_time(long unsigned int time);
 	void set_data(int i, unsigned char x);
 
 };
@@ -26,9 +28,14 @@ struct assembled_chunk {
 struct vdif_processor {
 
 	bool is_running;
+
+	assembled_chunk *processor_chunk;
+
+	unsigned char *temp;
+
 	vdif_processor();
 	~vdif_processor();
-	void process_chunk(shared_ptr<assembled_chunk> c, int *intensity, fftwf_complex *in, fftwf_complex *out, int index, char &mask);
+	void process_chunk(int *intensity, fftwf_complex *in, fftwf_complex *out, int index, char &mask);
 
 };
 
