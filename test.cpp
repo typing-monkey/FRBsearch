@@ -10,7 +10,7 @@ int main(int argc, char *argv[]) {
 	}
 	
 	
-	int n = 3;
+	int n = 4;
 	bool up = false;
 	
 	int nfreq = 1024;
@@ -29,8 +29,9 @@ int main(int argc, char *argv[]) {
 	
 	string bonsai_config_filename = "bonsai_config.hdf5";
 	string bonsai_output_filename = "bonsai_outputs.hdf5";	
+	int nt_per_file = 16384;
 
-	transform_list.push_back(make_bonsai_dedisperser(bonsai_config_filename,bonsai_output_filename));
+	transform_list.push_back(make_bonsai_dedisperser(bonsai_config_filename,bonsai_output_filename,nt_per_file));
 	
 	stream->run(transform_list);
 

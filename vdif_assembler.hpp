@@ -28,7 +28,6 @@ struct assembled_chunk {
 struct vdif_processor {
 
 	bool is_running;
-
 	assembled_chunk *processor_chunk;
 
 	unsigned char *temp;
@@ -70,6 +69,7 @@ struct vdif_assembler {
 
 	//int register_processor(vdif_processor *p);
 	//int kill_processor(vdif_processor *p);
+	int get_free_processor();
 	void run();
 	void intensity_streamformer();
 	void network_capture();

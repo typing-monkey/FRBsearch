@@ -35,13 +35,14 @@ public:
 		run_state.start_substream(0.0);
 		thread main_t(&vdif_assembler::run, assembler);
 			
-		for (int count = 0; count < 24; count ++) {	
+		for (;;) {	
 			float *intensity;
 			float *weights;
 			ssize_t stride;
 			bool zero_flag = false;
 			
 			run_state.setup_write(nt_maxwrite, intensity, weights, stride, zero_flag);
+			
 			assembler->get_intensity_chunk(buf);
 		
 			for (int i = 0; i < nfreq; i++) {
