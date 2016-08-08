@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
 	shared_ptr<wi_transform> r_c = shared_ptr<wi_transform>(new remove_continuum());
 	shared_ptr<wi_transform> r_nf2 = shared_ptr<wi_transform>(new remove_noisy_freq(3.0));
 
-
+	/*
 	transform_list.push_back(stb);
 	transform_list.push_back(r_o1);
 	transform_list.push_back(hpf);
@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
 	transform_list.push_back(r_bt);
 	transform_list.push_back(r_c);
 	transform_list.push_back(r_nf2);
-
+	*/
 	transform_list.push_back(make_bonsai_dedisperser(bonsai_config_filename,bonsai_output_filename,nt_per_file));
 
 	stream->run(transform_list);

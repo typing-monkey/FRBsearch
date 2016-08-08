@@ -35,8 +35,7 @@ auto start = chrono::steady_clock::now();
 mutex mtx,mtx2,mtx3;
 condition_variable cv,cv_chunk;
 //fftwf_plan p;
-bool upch = false;
-bool write_to_disk = false;
+
 
 char *strptime(const char * __restrict, const char * __restrict, struct tm * __restrict);
 
@@ -80,16 +79,23 @@ assembled_chunk::~assembled_chunk() {
 	delete[] data;
 }
 
-vdif_processor::vdif_processor(){
+vdif_processor::vdif_processor(bool flag){
 	is_running = false;
-
+	upch = flag;
 	processor_chunk = new assembled_chunk();
+	if (upch) {
+		temp_buf = new int[(constants::nfreq+32)*constants::nfft];
+		intensity_buf = new int[(constants::nfreq+32)*constants::nfft];
+	} else {
+		temp_buf = new int[constants::nfreq+32];
+		intensity_buf = new int[constants::nfreq+32];
+	}
 }
 
 vdif_processor::~vdif_processor(){
-	delete processor_chunk;
 	delete[] temp_buf;
 	delete[] intensity_buf;
+	delete processor_chunk;
 }
 
 void vdif_processor::process_chunk(int *intensity, int index, char &mask) {
@@ -104,31 +110,25 @@ void vdif_processor::process_chunk(int *intensity, int index, char &mask) {
 	cout << t0 << endl;
 	processor_chunk->t0 = t0;
 	
-	int nf = constants::nfreq;
-	if (upch) {
-		nf = nf * constants::nfft;
-	}
-	temp_buf = new int[nf+32];
-	intensity_buf = new int[nf+32];
-
+	//mask-out invalid data
 	for (int i = 0; i < constants::chunk_size; i++) {
-		if (processor_chunk->data[i*1056 + 3] >> 7) {
+		if (processor_chunk->data[i * 1056 + 3] >> 7) {
 			for (int j = 0; j < 1056; j++) {
-				processor_chunk->data[i*1056 + j] = 136;
+				processor_chunk->data[i*1056 + j] = 136; // 136 = 0+0j
 			}
 		}
 	}
 
-	int nt = constants::nsample_integrate;
-
 	for (int i = 0; i < constants::nt; i++) {
 		if (upch) {
-			//upchannelize(nt, constants::nfreq + 32, constants::nfft, processor_chunk->data + i * constants::nsample_integrate * (constants::nfreq+32));
-			nt = nt / constants::nfft;
-		}
-		u4_square_and_sum(nt, nf+32, processor_chunk->data + i * constants::nsample_integrate * (constants::nfreq+32), temp_buf, intensity_buf);
-		for (int j = 0; j < nf; j++) {
-			intensity[j * constants::nt + i] = intensity_buf[j + 32];
+			
+			//upchannelize(constants::nsample_integrate, constants::nfreq + 32, constants::nfft, processor_chunk->data + i * constants::nsample_integrate * (constants::nfreq+32));
+			
+		} else {
+			u4_square_and_sum(constants::nsample_integrate, constants::nfreq + 32, processor_chunk->data + i * constants::nsample_integrate * (constants::nfreq+32), temp_buf, intensity_buf);
+			for (int j = 0; j < constants::nfreq; j++) {
+				intensity[j * constants::nt + i] = intensity_buf[j + 32];
+			}
 		}
 	}
 
@@ -164,30 +164,15 @@ vdif_assembler::vdif_assembler(const char *arg1, const char *arg2, bool flag1, b
 		cout << "Unsupported option." << endl;
 		exit(1);
 	}
-
-	//in = new fftwf_complex *[number_of_processors];
-	//out = new fftwf_complex *[number_of_processors];
-	for (int i = 0; i< number_of_processors; i++) {
-		//in[i] = fftwf_alloc_complex(constants::nfft);
-		//out[i] = fftwf_alloc_complex(constants::nfft);
-	}
-
-	if (flag1) {
-		upch = true;		
-		//p = fftwf_plan_dft_1d(constants::nfft, in[0], out[0], FFTW_FORWARD, FFTW_MEASURE);
-	}
-
 	
 	number_of_processors = n;
 	processors = new vdif_processor *[number_of_processors];
-
+	
+	upch = flag1;
 	for (int i = 0; i< number_of_processors; i++) {
-		processors[i] = new vdif_processor();
+		processors[i] = new vdif_processor(flag1);
 	}
 
-	//data_buf = new unsigned char[constants::buffer_size * (constants::nfreq+32)];
-	//header_buf = new struct header[constants::buffer_size];
-	
 	bufsize = 0; p_index = 0;
 
 	chunk_count = 0;

@@ -27,12 +27,12 @@ struct assembled_chunk {
 
 struct vdif_processor {
 
-	bool is_running;
+	bool is_running,upch;
 	assembled_chunk *processor_chunk;
 
 	int *temp_buf, *intensity_buf;
 
-	vdif_processor();
+	vdif_processor(bool flag);
 	~vdif_processor();
 	void process_chunk(int *intensity, int index, char &mask);
 
@@ -52,7 +52,7 @@ struct vdif_assembler {
 	char *filelist_name;	
 	int chunk_count;
 	FILE *output;
-	bool write_to_disk;
+	bool upch, write_to_disk;
 	//fftwf_complex **in, **out;	
 	
 	int *intensity_buffer;
