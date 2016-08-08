@@ -34,7 +34,7 @@ struct vdif_processor {
 
 	vdif_processor();
 	~vdif_processor();
-	void process_chunk(int *intensity, fftwf_complex *in, fftwf_complex *out, int index, char &mask);
+	void process_chunk(int *intensity, int index, char &mask);
 
 };
 
@@ -50,8 +50,9 @@ struct vdif_assembler {
 	int port;
 	char *filelist_name;	
 	int chunk_count;
-
-	fftwf_complex **in, **out;	
+	FILE *output;
+	bool write_to_disk;
+	//fftwf_complex **in, **out;	
 
 	unsigned char *temp_buf;
 	unsigned char *data_buf;
@@ -63,7 +64,7 @@ struct vdif_assembler {
 	vdif_processor **processors;
 	thread *processor_threads;
 		
-	vdif_assembler(const char *arg1, const char *arg2, bool flag1, int n);
+	vdif_assembler(const char *arg1, const char *arg2, bool flag1, bool flag2, int n);
 
 	~vdif_assembler();
 
@@ -78,6 +79,8 @@ struct vdif_assembler {
 	void assemble_chunk();
 	void get_intensity_chunk(int *buf);
 	int is_full();
+	void move_start_index();
+	void move_end_index();
 	void vdif_read(unsigned char *data, int size);
 	void fill_missing(int n);
 };

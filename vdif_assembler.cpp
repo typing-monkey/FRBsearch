@@ -12,16 +12,20 @@
 #include <mutex>
 #include <queue>
 #include <condition_variable>
-#include <fftw3.h>
+//#include <fftw3.h>
 #include <rf_pipelines.hpp>
 #include <sys/time.h>
 #include <chrono>
 //#include "gaussian.cpp"
 
+#include <sched.h>
+#include <pthread.h>
+
 #include "vdif_assembler.hpp"
-#include "square_sum.cpp"
-#include "upchannelize.cpp"
+#include "square_sum_andre.cpp"
+//#include "upchannelize.cpp"
 #include <assert.h>
+
 
 using namespace std;
 using namespace rf_pipelines;
@@ -30,7 +34,7 @@ auto start = chrono::steady_clock::now();
 
 mutex mtx,mtx2,mtx3;
 condition_variable cv,cv_chunk;
-fftwf_plan p;
+//fftwf_plan p;
 bool upch = false;
 bool write_to_disk = false;
 
@@ -46,7 +50,7 @@ namespace constants{
 	const int frame_per_second = 390625;
 	const unsigned int buffer_size = 819200; //
 	const int file_packets = 131072;
-	const int udp_packets = 32;
+	const int udp_packets = 8;
 	const int nfft = 16;
 	const int nsample_integrate = 16*24*2;
 	const int intensity_chunk_size = (int) chunk_size / nsample_integrate * nfreq;
@@ -87,32 +91,27 @@ vdif_processor::~vdif_processor(){
 	delete[] temp;
 }
 
-void vdif_processor::process_chunk(int *intensity, fftwf_complex *in, fftwf_complex *out, int index, char &mask) {
+void vdif_processor::process_chunk(int *intensity, int index, char &mask) {
 	
 	int seconds,frames;
 	long int t0;
+	int temp_buf[constants::nfreq + 32];
+	int intensity_buf[constants::nfreq + 32];
+
 	memcpy(&seconds,processor_chunk->data,sizeof(int));
-        memcpy(&frames,(processor_chunk->data)+4,sizeof(int));
+        memcpy(&frames,(processor_chunk->data) + 4,sizeof(int));
         t0 = (long int) (seconds & 0x3FFFFFFF) * (long int) constants::frame_per_second + (long int) (frames & 0xFFFFFF);
+
 	cout << t0 << endl;
 	processor_chunk->t0 = t0;
-	/*
-	for(int i = 0; i < constants::nfreq; i++) {
-		
-		for (int j = 0; j < constants::chunk_size; j++) {
-			temp[j] = processor_chunk->data[i + constants::nfreq*j+32];
-		}
 
-		int nintegrate = 9;
-		if (upch) {
-			upchannelize_square_sum(constants::chunk_size, constants::nfft, temp, in, out, p);
-			nintegrate -= 4;
+	for (int i = 0; i < constants::chunk_size / constants::nsample_integrate; i++) {
+		u4_square_and_sum(constants::nsample_integrate, constants::nfreq + 32, processor_chunk->data + i * constants::nsample_integrate * (constants::nfreq+32), temp_buf, intensity_buf);
+		for (int j = 0; j < constants::nfreq; j++) {
+			intensity[j * constants::nfreq + i] = intensity_buf[j + 32];
 		}
-		square_sum(temp, constants::chunk_size, nintegrate, intensity + i * (constants::intensity_chunk_size / constants::nfreq));
-			
-	} 
-	*/
-	square_sum(processor_chunk->data,constants::chunk_size * constants::nfreq, 9, intensity);
+	}
+
 	//gaussian_number(intensity, 1024*1024);
 
 	cout << "Processing chunk done." << endl;
@@ -130,7 +129,7 @@ void vdif_processor::process_chunk(int *intensity, fftwf_complex *in, fftwf_comp
 }
 
 
-vdif_assembler::vdif_assembler(const char *arg1, const char *arg2, bool flag1, int n){
+vdif_assembler::vdif_assembler(const char *arg1, const char *arg2, bool flag1, bool flag2, int n){
 	number_of_processors = n;
 	if (strcmp("network",arg1)==0) {
 		temp_buf = new unsigned char[constants::udp_packets * 1056];
@@ -149,16 +148,16 @@ vdif_assembler::vdif_assembler(const char *arg1, const char *arg2, bool flag1, i
 		exit(1);
 	}
 
-	in = new fftwf_complex *[number_of_processors];
-	out = new fftwf_complex *[number_of_processors];
+	//in = new fftwf_complex *[number_of_processors];
+	//out = new fftwf_complex *[number_of_processors];
 	for (int i = 0; i< number_of_processors; i++) {
-		in[i] = fftwf_alloc_complex(constants::nfft);
-		out[i] = fftwf_alloc_complex(constants::nfft);
+		//in[i] = fftwf_alloc_complex(constants::nfft);
+		//out[i] = fftwf_alloc_complex(constants::nfft);
 	}
 
 	if (flag1) {
 		upch = true;		
-		p = fftwf_plan_dft_1d(constants::nfft, in[0], out[0], FFTW_FORWARD, FFTW_MEASURE);
+		//p = fftwf_plan_dft_1d(constants::nfft, in[0], out[0], FFTW_FORWARD, FFTW_MEASURE);
 	}
 
 	
@@ -178,16 +177,24 @@ vdif_assembler::vdif_assembler(const char *arg1, const char *arg2, bool flag1, i
 	processor_threads = new thread[number_of_processors];
 	intensity_buffer = new int[constants::intensity_buffer_size];
 	intensity_buffer_mask = 0;
+        output = fopen("test.dat","w");
+        if (!output) {
+                cout << "Can't write to file." << endl;
+                exit(10);
+        }
+	write_to_disk = flag2;
+
+
 
 }
 
 vdif_assembler::~vdif_assembler() {
 	
 	for (int i = 0; i < number_of_processors; i++) {
-		fftwf_free(in[i]);
-		fftwf_free(out[i]);
+		//fftwf_free(in[i]);
+		//fftwf_free(out[i]);
 	}
-
+	fclose(output);
 	delete[] processors;
 	delete[] data_buf;
 	delete[] header_buf;
@@ -283,13 +290,18 @@ void vdif_assembler::get_intensity_chunk(int *buf) {
 		
 				buf[i] = intensity_buffer[i_start_index * constants::intensity_chunk_size + i];
 
-			}	
-
+			}
+			chunk_count++;
+			if (write_to_disk) {	
+				fwrite(buf, sizeof(int), constants::intensity_chunk_size, output);
+                        	cout << "Writing chunk " << chunk_count << " to test.dat..." << endl;
+			}
+			
 			intensity_buffer_mask = intensity_buffer_mask ^ (1 << i_start_index);
 			cout << chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now() - start).count() << "ms" <<endl;
 			start = chrono::steady_clock::now();
 			lk3.unlock();
-			cout << "Finish assembling chunk " << i_start_index << ", sending to bonsai..." << endl;
+			cout << "Finish assembling chunk " << chunk_count << ", sending to bonsai..." << endl;
 			i_start_index = (i_start_index + 1) % constants::max_chunks;
 			break;
 		}
@@ -340,7 +352,7 @@ void vdif_assembler::assemble_chunk() {
 				
 				cout << "Assigned to processor: " << p_index << endl;
  	
-				processor_threads[p_index] = thread(&vdif_processor::process_chunk,processors[p_index],intensity_buffer+i_end_index*constants::intensity_chunk_size,in[p_index],out[p_index],i_end_index,ref(intensity_buffer_mask));
+				processor_threads[p_index] = thread(&vdif_processor::process_chunk,processors[p_index],intensity_buffer+i_end_index*constants::intensity_chunk_size,i_end_index,ref(intensity_buffer_mask));
 				processor_threads[p_index].detach();
 				assigned = true;
 				i_end_index = (i_end_index + 1) % constants::max_chunks;
@@ -389,7 +401,7 @@ void vdif_assembler::network_capture() {
 	}
 	server_address.sin_family = AF_INET;
 	server_address.sin_port = htons(port);
-	server_address.sin_addr.s_addr = inet_addr("127.0.0.1");
+	server_address.sin_addr.s_addr = inet_addr("10.1.1.2");
 	if (bind(sock_fd, (struct sockaddr *) &server_address, sizeof(server_address)) < 0) {
 		cout << "bind failed." << std::endl;
 	}
@@ -402,9 +414,9 @@ void vdif_assembler::network_capture() {
 			if (bufsize == constants::chunk_size) {
 				cout << chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now() - start).count() << "ms" <<endl;
 		                start = chrono::steady_clock::now();
-				cout << "Assigned to processor: " << p_index << " Intensity position: " << i_end_index << endl;
+				cout << "Assigned to processor: " << p_index << endl;
 				
-                                processor_threads[p_index] = thread(&vdif_processor::process_chunk,processors[p_index],intensity_buffer+i_end_index*constants::intensity_chunk_size,in[p_index],out[p_index],i_end_index,ref(intensity_buffer_mask));
+                                processor_threads[p_index] = thread(&vdif_processor::process_chunk,processors[p_index],intensity_buffer+i_end_index*constants::intensity_chunk_size,i_end_index,ref(intensity_buffer_mask));
 				processors[p_index]->is_running = true;
                                 processor_threads[p_index].detach();
                                 i_end_index = (i_end_index + 1) % constants::max_chunks;
@@ -487,18 +499,19 @@ void vdif_assembler::simulate() {
 				}
 	
 				bufsize ++;
-                        	if (bufsize == constants::chunk_size) {
-                                	cout << "Assigned to processor: " << p_index << "Intensity position: " << i_end_index << endl;
-					cout << chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now() - start).count() << "ms" <<endl;
-               				start = chrono::steady_clock::now();
+				if (bufsize == constants::chunk_size) {
+                                	cout << chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now() - start).count() << "ms" <<endl;
+                                	start = chrono::steady_clock::now();
+                                	cout << "Assigned to processor: " << p_index << endl;
 
-                                	processor_threads[p_index] = thread(&vdif_processor::process_chunk,processors[p_index],intensity_buffer+i_end_index*constants::intensity_chunk_size,in[p_index],out[p_index],i_end_index,ref(intensity_buffer_mask));
+                                	processor_threads[p_index] = thread(&vdif_processor::process_chunk,processors[p_index],intensity_buffer+i_end_index*constants::intensity_chunk_size,i_end_index,ref(intensity_buffer_mask));
                                 	processors[p_index]->is_running = true;
                                 	processor_threads[p_index].detach();
                                 	i_end_index = (i_end_index + 1) % constants::max_chunks;
-                                	bufsize = 0;
+                               		bufsize = 0;
                                 	p_index = get_free_processor();
 				}
+                        	
 				
 			}	
 		}
