@@ -4,7 +4,7 @@ CFLAG:= -ggdb -mavx -std=c++11 -O3
 
 all:test
 
-test: test.cpp vdif_assembler.hpp vdif_assembler.cpp square_sum.cpp upchannelize.cpp aro_stream.cpp gaussian.cpp
-	$(CPP) $(CPP_LFLAGS) -o $@ $< -lfftw3f -pthread -lrf_pipelines -lm
+test: test.cpp vdif_assembler.hpp vdif_assembler.cpp square_sum.cpp upchannelize.cpp aro_stream.cpp gaussian.cpp preprocessing.cpp
+	$(CPP) $(CPP_LFLAGS) -o $@ $< -lfftw3 -pthread -lrf_pipelines -lm
 
 

@@ -14,14 +14,14 @@ class aro_stream: public wi_stream {
 	vdif_assembler *assembler;
 
 public:
-	aro_stream(int nfreq_, double freq_lo_MHz_, double freq_hi_MHz_, double dt_sample_, const char *arg1, const char *arg2, bool flag1, int n) {
+	aro_stream(int nfreq_, double freq_lo_MHz_, double freq_hi_MHz_, double dt_sample_, const char *arg1, const char *arg2, bool flag1, bool flag2, int n) {
 		
 		this->nfreq = nfreq_;
 		this->freq_lo_MHz = freq_lo_MHz_;
 		this->freq_hi_MHz = freq_hi_MHz_;
 		this->dt_sample = dt_sample_;	
 		this->nt_maxwrite = 1024;
-		assembler = new vdif_assembler(arg1, arg2, flag1, n);
+		assembler = new vdif_assembler(arg1, arg2, flag1, flag2, n);
 
 		buf = new int[nfreq * nt_maxwrite];
 	}

@@ -44,7 +44,7 @@ struct vdif_assembler {
 
 	int number_of_processors;
 	int start_index, i_start_index, i_end_index, end_index;
-	int bufsize;
+	//int bufsize;
 	int mode;
 	string source;
 	int port;
@@ -72,15 +72,15 @@ struct vdif_assembler {
 	//int kill_processor(vdif_processor *p);
 	int get_free_processor();
 	void run();
-	void intensity_streamformer();
+	//void intensity_streamformer();
 	void network_capture();
 	void read_from_disk();
 	void simulate();
-	void assemble_chunk();
+	//void assemble_chunk();
 	void get_intensity_chunk(int *buf);
-	int is_full();
-	void move_start_index();
-	void move_end_index();
-	void vdif_read(unsigned char *data, int size);
-	void fill_missing(int n);
+	//int is_full();
+	//void move_start_index();
+	//void move_end_index();
+	//void vdif_read(unsigned char *data, int size);
+	//void fill_missing(int n);
 };
