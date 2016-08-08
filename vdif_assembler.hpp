@@ -75,7 +75,7 @@ struct vdif_assembler {
 	void simulate();
 	//void assemble_chunk();
 	void assign_chunk();
-	void get_intensity_chunk(int *buf);
+	void get_intensity_chunk(float *intensity, ssize_t stride);
 	//int is_full();
 	//void move_start_index();
 	//void move_end_index();

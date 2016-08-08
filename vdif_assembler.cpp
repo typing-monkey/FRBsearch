@@ -53,7 +53,8 @@ namespace constants{
 	const int udp_packets = 32;
 	const int nfft = 16;
 	const int nsample_integrate = 16*24*2;
-	const int intensity_chunk_size = (int) chunk_size / nsample_integrate * nfreq;
+	const int nt = chunk_size / nsample_integrate;
+	const int intensity_chunk_size = nt * nfreq;
 	const int intensity_buffer_size = intensity_chunk_size * max_chunks;
 }
 
@@ -83,8 +84,6 @@ vdif_processor::vdif_processor(){
 	is_running = false;
 
 	processor_chunk = new assembled_chunk();
-	temp_buf = new int[constants::nfreq + 32];
-	intensity_buf = new int[constants::nfreq + 32];
 }
 
 vdif_processor::~vdif_processor(){
@@ -104,11 +103,32 @@ void vdif_processor::process_chunk(int *intensity, int index, char &mask) {
 
 	cout << t0 << endl;
 	processor_chunk->t0 = t0;
+	
+	int nf = constants::nfreq;
+	if (upch) {
+		nf = nf * constants::nfft;
+	}
+	temp_buf = new int[nf+32];
+	intensity_buf = new int[nf+32];
 
-	for (int i = 0; i < constants::chunk_size / constants::nsample_integrate; i++) {
-		u4_square_and_sum(constants::nsample_integrate, constants::nfreq + 32, processor_chunk->data + i * constants::nsample_integrate * (constants::nfreq+32), temp_buf, intensity_buf);
-		for (int j = 0; j < constants::nfreq; j++) {
-			intensity[j * constants::nfreq + i] = intensity_buf[j + 32];
+	for (int i = 0; i < constants::chunk_size; i++) {
+		if (processor_chunk->data[i*1056 + 3] >> 7) {
+			for (int j = 0; j < 1056; j++) {
+				processor_chunk->data[i*1056 + j] = 136;
+			}
+		}
+	}
+
+	int nt = constants::nsample_integrate;
+
+	for (int i = 0; i < constants::nt; i++) {
+		if (upch) {
+			//upchannelize(nt, constants::nfreq + 32, constants::nfft, processor_chunk->data + i * constants::nsample_integrate * (constants::nfreq+32));
+			nt = nt / constants::nfft;
+		}
+		u4_square_and_sum(nt, nf+32, processor_chunk->data + i * constants::nsample_integrate * (constants::nfreq+32), temp_buf, intensity_buf);
+		for (int j = 0; j < nf; j++) {
+			intensity[j * constants::nt + i] = intensity_buf[j + 32];
 		}
 	}
 
@@ -275,20 +295,22 @@ void vdif_assembler::intensity_streamformer() {
 	fclose(output);
 }
 */
-void vdif_assembler::get_intensity_chunk(int *buf) {
+void vdif_assembler::get_intensity_chunk(float *intensity, ssize_t stride) {
 
 	for (;;) {
 		unique_lock<mutex> lk3(mtx3);		
 		if (intensity_buffer_mask & (1 << i_start_index)) {
 
-			for (int i = 0; i < constants::intensity_chunk_size; i++ ) {
+			for (int i = 0; i < constants::nt; i++ ) {
+				for (int j = 0; j < constants::nfreq; j++) {
 		
-				buf[i] = intensity_buffer[i_start_index * constants::intensity_chunk_size + i];
-
+				intensity[i*stride + j] = intensity_buffer[i_start_index * constants::intensity_chunk_size + i * constants::nfreq + j];
+				
+				}
 			}
 			chunk_count++;
 			if (write_to_disk) {	
-				fwrite(buf, sizeof(int), constants::intensity_chunk_size, output);
+				fwrite(intensity_buffer + i_start_index * constants::intensity_chunk_size, sizeof(int), constants::intensity_chunk_size, output);
                         	cout << "Writing chunk " << chunk_count << " to test.dat..." << endl;
 			}
 			
@@ -479,7 +501,7 @@ void vdif_assembler::simulate() {
 		//int start_frame = rand() % (constants::frame_per_second - 2000);
 		//start_frame = 1000;
 		//cout << duration << " " << start_frame << endl;
-		for (int frame = 0; frame < constants::frame_per_second; frame+=2) {
+		for (int frame = 0; frame < constants::frame_per_second; frame++) {
 			unsigned char voltage = 136;
 			//if ((frame > start_frame) && (frame < start_frame+duration)) {
 				//cout << "pulse!" << endl;
