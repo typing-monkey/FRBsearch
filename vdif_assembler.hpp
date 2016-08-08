@@ -30,7 +30,7 @@ struct vdif_processor {
 	bool is_running;
 	assembled_chunk *processor_chunk;
 
-	unsigned char *temp;
+	int *temp_buf, *intensity_buf;
 
 	vdif_processor();
 	~vdif_processor();
@@ -43,8 +43,9 @@ struct vdif_processor {
 struct vdif_assembler {
 
 	int number_of_processors;
-	int start_index, i_start_index, i_end_index, end_index;
-	//int bufsize;
+	int i_start_index, i_end_index;
+	int bufsize,p_index;
+
 	int mode;
 	string source;
 	int port;
@@ -53,10 +54,6 @@ struct vdif_assembler {
 	FILE *output;
 	bool write_to_disk;
 	//fftwf_complex **in, **out;	
-
-	unsigned char *temp_buf;
-	unsigned char *data_buf;
-	struct header *header_buf;
 	
 	int *intensity_buffer;
 	char intensity_buffer_mask;
@@ -77,6 +74,7 @@ struct vdif_assembler {
 	void read_from_disk();
 	void simulate();
 	//void assemble_chunk();
+	void assign_chunk();
 	void get_intensity_chunk(int *buf);
 	//int is_full();
 	//void move_start_index();

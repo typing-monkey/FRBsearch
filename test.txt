@@ -1,0 +1,2 @@
+/home/surp2016lyu/FRBsearch/0000000.vdif
+/home/surp2016lyu/FRBsearch/0000001.vdif

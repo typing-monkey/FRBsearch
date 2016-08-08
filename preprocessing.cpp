@@ -7,7 +7,7 @@
 #include <memory>
 #include <stdio.h>
 #include <string.h>
-#include <png++/png.hpp>
+//#include <png++/png.hpp>
 #include "rf_pipelines_internals.hpp"
 
 using namespace std;
