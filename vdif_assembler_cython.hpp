@@ -2,8 +2,8 @@
 
 struct cython_assembler{
 	vdif_assembler *a;
-	cython_assembler(const char* arg1, const char* arg2, bool flag, int n){
-		a = new vdif_assembler(arg1,arg2,flag,n);
+	cython_assembler(const char* arg1, const char* arg2, bool flag, bool todisk, int n){
+		a = new vdif_assembler(arg1,arg2,flag,todisk,n);
 	}
 
 	void run(){
