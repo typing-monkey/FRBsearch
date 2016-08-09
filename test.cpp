@@ -10,7 +10,7 @@ int main(int argc, char *argv[]) {
 	}
 	
 	
-	int n = 4;
+	int n = 3;
 	bool up = false;
 	bool write = false;
 	int nfreq = 1024;

@@ -26,13 +26,14 @@ struct assembled_chunk {
 
 
 struct vdif_processor {
-
+	int p_id;
 	bool is_running,upch;
 	assembled_chunk *processor_chunk;
+	cpu_set_t p_cpuset;	
 
 	int *temp_buf, *intensity_buf;
 
-	vdif_processor(bool flag);
+	vdif_processor(int id, bool flag);
 	~vdif_processor();
 	void process_chunk(int *intensity, int index, char &mask);
 

@@ -31,9 +31,10 @@ using namespace std;
 using namespace rf_pipelines;
 
 auto start = chrono::steady_clock::now();
-
 mutex mtx,mtx2,mtx3;
 condition_variable cv,cv_chunk;
+
+float perf, tot_perf, avg_perf;
 //fftwf_plan p;
 
 
@@ -79,7 +80,9 @@ assembled_chunk::~assembled_chunk() {
 	delete[] data;
 }
 
-vdif_processor::vdif_processor(bool flag){
+vdif_processor::vdif_processor(int id, bool flag){
+
+	p_id = id;
 	is_running = false;
 	upch = flag;
 	processor_chunk = new assembled_chunk();
@@ -90,6 +93,9 @@ vdif_processor::vdif_processor(bool flag){
 		temp_buf = new int[constants::nfreq+32];
 		intensity_buf = new int[constants::nfreq+32];
 	}
+
+	CPU_ZERO(&p_cpuset);
+	CPU_SET(p_id * 2 + 3, &p_cpuset);
 }
 
 vdif_processor::~vdif_processor(){
@@ -100,6 +106,8 @@ vdif_processor::~vdif_processor(){
 
 void vdif_processor::process_chunk(int *intensity, int index, char &mask) {
 	
+	sched_setaffinity(0, sizeof(cpu_set_t), &p_cpuset);	
+
 	int seconds,frames;
 	long int t0;	
 	
@@ -170,7 +178,7 @@ vdif_assembler::vdif_assembler(const char *arg1, const char *arg2, bool flag1, b
 	
 	upch = flag1;
 	for (int i = 0; i< number_of_processors; i++) {
-		processors[i] = new vdif_processor(flag1);
+		processors[i] = new vdif_processor(i, flag1);
 	}
 
 	bufsize = 0; p_index = 0;
@@ -300,8 +308,12 @@ void vdif_assembler::get_intensity_chunk(float *intensity, ssize_t stride) {
 			}
 			
 			intensity_buffer_mask = intensity_buffer_mask ^ (1 << i_start_index);
-			cout << chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now() - start).count() << "ms" <<endl;
+			perf = chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now() - start).count();
+			cout << perf << "ms" <<endl;
 			start = chrono::steady_clock::now();
+			tot_perf += perf;
+			avg_perf = tot_perf / chunk_count;
+			cout << "Average performance: " << avg_perf << "ms" << endl;
 			lk3.unlock();
 			cout << "Finish assembling chunk " << chunk_count << ", sending to bonsai..." << endl;
 			i_start_index = (i_start_index + 1) % constants::max_chunks;
@@ -407,6 +419,12 @@ int vdif_assembler::get_free_processor() {
 }
 
 void vdif_assembler::network_capture() {
+	
+	cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(6,&cpuset);
+        sched_setaffinity(0,sizeof(cpu_set_t),&cpuset);
+
 	
 	int size = constants::udp_packets * 1056;
 	struct sockaddr_in server_address;
