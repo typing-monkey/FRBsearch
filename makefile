@@ -9,6 +9,7 @@ PYMODULES=vdif_assembler.py
 #OFILES=vdif_assembler.o
 LIBFILES=libvdif_assembler.so
 BINFILES=test
+IPP_DIR = /home/surp2016lyu/ipp/include
 
 #all: $(BINFILES) $(LIBFILES) $(LIBCYTHON) $(TESTBINFILES)
 all: libvdif_assembler.so vdif_assembler_cython.so
@@ -28,17 +29,17 @@ all: libvdif_assembler.so vdif_assembler_cython.so
 # 	$(CPP) $(CPP_LFLAGS) -c -o $@ $< -I$(PYINCDIR) -lfftw3f -pthread -lrf_pipelines -lpng -lm
 
 vdif_assembler.o: vdif_assembler.cpp vdif_assembler.hpp
-	$(CPP) -c -o $@ $<
+	$(CPP) -c -o $@ $< -I$(IPP_DIR)
 	#$(CPP) $(CPP_LFLAGS) -c -o $@ $< -I$(PYINCDIR) -lfftw3f -pthread -lrf_pipelines -lpng -lm
 
 vdif_assembler_cython.cpp: vdif_assembler_cython.pyx vdif_assembler_pxd.pxd vdif_assembler_cython.hpp $(INCFILES)
 	cython --cplus $<
 
 libvdif_assembler.so: vdif_assembler.o
-	$(CPP) -o $@ -shared $^
+	$(CPP) -o $@ -shared $^ -I$(IPP_DIR)
 
 vdif_assembler_cython.so: vdif_assembler_cython.cpp libvdif_assembler.so vdif_assembler.hpp
-	$(CPP) -shared -o $@ $<  -lvdif_assembler -lfftw3f -pthread -lrf_pipelines -lhdf5 -lpng -lm 
+	$(CPP) -shared -o $@ $< -lvdif_assembler -lfftw3f -pthread -lrf_pipelines -lhdf5 -lpng -lm 
 
 install: $(INCFILES) $(LIBFILES) $(LIBCYTHON)
 	cp -f $(INCFILES) $(INCDIR)/

@@ -23,9 +23,13 @@ cdef class assembler:
 			self.p = NULL
 
 	def get_intensity_chunk(self):
+		self.get_intensity_chunk_c()
+		return None, None
+	
+	cpdef get_intensity_chunk_c(self):
 		#assert empty_ar.dtype == np.int32_t, "get_intensity_chunk got incorrect dtype array"
-		cdef np.ndarray[np.int32_t, ndim=2] data_ar = np.empty((1024,1024),dtype=np.int32)
-		self.p.get_intensity_chunk(<int*> data_ar.data)
+		cdef np.ndarray[np.float32_t, ndim=2] data_ar = np.empty((1024,1024),dtype=np.float32)
+		self.p.get_intensity_chunk(<float*> data_ar.data,1024)
 		if self.first_t0 == None:
 			self.first_t0 = time.time()
 

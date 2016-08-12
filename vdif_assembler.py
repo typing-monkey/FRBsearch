@@ -19,7 +19,7 @@ class assembler:
 			print "getting chunk from assembler"
 			t0, chunk = self._assembler.get_intensity_chunk()
 			print "got chunk with t0: ", t0
-			p.process_chunk(t0,1024, chunk,None)
+			p.process_chunk(t0,1024, chunk, None)
 		
 
 class processor(object):

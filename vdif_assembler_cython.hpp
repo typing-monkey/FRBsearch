@@ -10,7 +10,7 @@ struct cython_assembler{
 		a->run();
 	}
 
-	void get_intensity_chunk(int* buf){
-		a->get_intensity_chunk(buf);
+	void get_intensity_chunk(float* buf,int ntime){
+		a->get_intensity_chunk(buf,ntime);
 	}
 };
