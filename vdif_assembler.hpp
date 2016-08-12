@@ -1,7 +1,5 @@
 #include <iostream>
 #include <stdlib.h>
-#include <thread>
-#include "rf_pipelines_internals.hpp"
 
 using namespace std;
 using namespace rf_pipelines;
@@ -28,13 +26,14 @@ struct assembled_chunk {
 
 
 struct vdif_processor {
-
-	bool is_running;
+	int p_id;
+	bool is_running,upch;
 	assembled_chunk *processor_chunk;
+	cpu_set_t p_cpuset;	
 
-	unsigned char *temp;
+	int *temp_buf, *intensity_buf;
 
-	vdif_processor();
+	vdif_processor(int id, bool flag);
 	~vdif_processor();
 	void process_chunk(int *intensity, int index, char &mask);
 
@@ -45,20 +44,17 @@ struct vdif_processor {
 struct vdif_assembler {
 
 	int number_of_processors;
-	int start_index, i_start_index, i_end_index, end_index;
-	int bufsize;
+	int i_start_index, i_end_index;
+	int bufsize,p_index;
+
 	int mode;
 	string source;
 	int port;
 	char *filelist_name;	
 	int chunk_count;
 	FILE *output;
-	bool write_to_disk;
+	bool upch, write_to_disk;
 	//fftwf_complex **in, **out;	
-
-	unsigned char *temp_buf;
-	unsigned char *data_buf;
-	struct header *header_buf;
 	
 	int *intensity_buffer;
 	char intensity_buffer_mask;
@@ -74,15 +70,16 @@ struct vdif_assembler {
 	//int kill_processor(vdif_processor *p);
 	int get_free_processor();
 	void run();
-	void intensity_streamformer();
+	//void intensity_streamformer();
 	void network_capture();
 	void read_from_disk();
 	void simulate();
-	void assemble_chunk();
-	void get_intensity_chunk(int *buf);
-	int is_full();
-	void move_start_index();
-	void move_end_index();
-	void vdif_read(unsigned char *data, int size);
-	void fill_missing(int n);
+	//void assemble_chunk();
+	void assign_chunk();
+	void get_intensity_chunk(float *intensity, ssize_t stride);
+	//int is_full();
+	//void move_start_index();
+	//void move_end_index();
+	//void vdif_read(unsigned char *data, int size);
+	//void fill_missing(int n);
 };

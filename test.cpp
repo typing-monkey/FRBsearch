@@ -1,6 +1,5 @@
 #include "aro_stream.cpp"
 #include "preprocessing.cpp"
-#include <fftw3.h>
 
 using namespace std;
 
@@ -11,7 +10,7 @@ int main(int argc, char *argv[]) {
 	}
 	
 	
-	int n = 4;
+	int n = 3;
 	bool up = false;
 	bool write = false;
 	int nfreq = 1024;
@@ -37,7 +36,7 @@ int main(int argc, char *argv[]) {
 	string bonsai_output_filename = "bonsai_outputs.hdf5";	
 	int nt_per_file = 16384;
 
-	//rfi filters
+		//rfi filters
 
 	shared_ptr<wi_transform> stb = shared_ptr<wi_transform>(new sys_temperature_bandpass());
 	shared_ptr<wi_transform> r_o1 = shared_ptr<wi_transform>(new remove_outliers(5.0));
@@ -67,7 +66,6 @@ int main(int argc, char *argv[]) {
 	transform_list.push_back(pw1);
 
 	transform_list.push_back(make_bonsai_dedisperser(bonsai_config_filename,bonsai_output_filename,nt_per_file));
-
 	stream->run(transform_list);
 
 	//vdif_assembler a(argv[1],argv[2],up,n);
@@ -75,4 +73,3 @@ int main(int argc, char *argv[]) {
 	
 	//a.run();
 }
-

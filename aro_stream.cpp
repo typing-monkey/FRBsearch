@@ -34,7 +34,7 @@ public:
 		
 		run_state.start_substream(0.0);
 		thread main_t(&vdif_assembler::run, assembler);
-					
+			
 		for (;;) {	
 			float *intensity;
 			float *weights;
@@ -43,12 +43,12 @@ public:
 			
 			run_state.setup_write(nt_maxwrite, intensity, weights, stride, zero_flag);
 			
-			assembler->get_intensity_chunk(buf);
+			assembler->get_intensity_chunk(intensity,stride);
 		
 			for (int i = 0; i < nfreq; i++) {
 				for (int j = 0; j < nt_maxwrite; j++) {		
 					
-					intensity[i*stride + j] = buf[i*nfreq+j];
+					//intensity[i*stride + j] = buf[i*nfreq+j];
 					weights[i*stride + j] = 1.0;
 					
 				}
