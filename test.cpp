@@ -10,7 +10,7 @@ int main(int argc, char *argv[]) {
 	}
 	
 	
-	int n = 3;
+	int n = 6;
 	bool up = false;
 	bool write = false;
 	int nfreq = 1024;
@@ -21,6 +21,7 @@ int main(int argc, char *argv[]) {
 	if (strcmp("-u",argv[3])==0) {
 		cout << "Upchannelization enabled." << endl;
 		up = true;
+		nfreq *= 16;
 	}
 	
 	if (strcmp("-w",argv[4])==0) {
