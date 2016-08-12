@@ -12,7 +12,7 @@ BINFILES=test
 IPP_DIR = /home/surp2016lyu/ipp/include
 
 #all: $(BINFILES) $(LIBFILES) $(LIBCYTHON) $(TESTBINFILES)
-all: libvdif_assembler.so vdif_assembler_cython.so
+all: libvdif_assembler.so vdif_assembler_cython.so test
 
 #cython: $(LIBCYTHON)
 
@@ -40,6 +40,9 @@ libvdif_assembler.so: vdif_assembler.o
 
 vdif_assembler_cython.so: vdif_assembler_cython.cpp libvdif_assembler.so vdif_assembler.hpp
 	$(CPP) -shared -o $@ $< -lvdif_assembler -lfftw3f -pthread -lrf_pipelines -lhdf5 -lpng -lm 
+
+test: test.cpp vdif_assembler.hpp vdif_assembler.cpp aro_stream.cpp gaussian.cpp preprocessing.cpp
+	$(CPP) $(CPP_LFLAGS) -o $@ $< -I$(IPP_DIR) -lfftw3 -pthread -lrf_pipelines -lm
 
 install: $(INCFILES) $(LIBFILES) $(LIBCYTHON)
 	cp -f $(INCFILES) $(INCDIR)/
