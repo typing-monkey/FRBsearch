@@ -1,5 +1,5 @@
 import vdif_assembler_cython
-import threading
+from multiprocessing import Process
 
 class assembler:
 	def __init__(self, arg1, arg2, flag, n):
@@ -10,13 +10,15 @@ class assembler:
 		self.python_processor = p
 
 	def run(self):
-		assembler_thread = threading.Thread(
+		assembler_thread = Process(
 	            target=self._assembler.run,
 	          	)
+		print "starting thread!"
 		assembler_thread.start()
 		while(True):
 			print "getting chunk from assembler"
 			t0, chunk = self._assembler.get_intensity_chunk()
+			print "got chunk with t0: ", t0
 			p.process_chunk(t0,1024, chunk,None)
 		
 
