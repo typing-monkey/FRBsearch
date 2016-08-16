@@ -67,20 +67,13 @@ struct vdif_assembler {
 
 	~vdif_assembler();
 
-	//int register_processor(vdif_processor *p);
-	//int kill_processor(vdif_processor *p);
+
 	int get_free_processor();
 	void run();
-	//void intensity_streamformer();
 	void network_capture();
 	void read_from_disk();
 	void simulate();
-	//void assemble_chunk();
 	void assign_chunk();
 	void get_intensity_chunk(float *intensity, ssize_t stride);
-	//int is_full();
-	//void move_start_index();
-	//void move_end_index();
-	//void vdif_read(unsigned char *data, int size);
-	//void fill_missing(int n);
+
 };

@@ -5,7 +5,7 @@ using namespace std;
 
 int main(int argc, char *argv[]) {
 	if (argc != 5) {
-		cout << "run with:test <network/disk/simulate> <port/filelist> <-u/-nu> <-w/-nw>" << endl;
+		cout << "run with:FRBsearch <network/disk/simulate> <port/filelist> <-u/-nu> <-w/-nw>" << endl;
 		exit(10);
 	}
 	
