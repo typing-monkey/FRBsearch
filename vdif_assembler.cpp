@@ -12,11 +12,11 @@
 #include <mutex>
 #include <queue>
 #include <condition_variable>
-#include <ipp.h>
 #include <rf_pipelines.hpp>
 #include <sys/time.h>
 #include <chrono>
 //#include "gaussian.cpp"
+#include <fftw3.h>
 
 #include <sched.h>
 #include <pthread.h>
@@ -32,10 +32,11 @@ using namespace rf_pipelines;
 
 auto start = chrono::steady_clock::now();
 mutex mtx,mtx2,mtx3;
-condition_variable cv,cv_chunk;
+condition_variable *cv;
 
 float perf, tot_perf, avg_perf;
-//fftwf_plan p;
+
+fftw_plan p;
 
 
 char *strptime(const char * __restrict, const char * __restrict, struct tm * __restrict);
@@ -54,15 +55,14 @@ namespace constants{
 	const int nfft = 16;
 	const int nsample_integrate = 16*24*2;
 	const int nt = chunk_size / nsample_integrate;
-	const int intensity_chunk_size = nt * nfreq;
-	const int intensity_buffer_size = intensity_chunk_size * max_chunks;
+	int intensity_chunk_size = nt * nfreq;
+	int intensity_buffer_size = intensity_chunk_size * max_chunks;
 }
 
 
 assembled_chunk::assembled_chunk() : t0(0) {
 
 	data = new unsigned char[constants::chunk_size * (constants::nfreq+32)];
-
 }
 
 void assembled_chunk::set_time(long unsigned int time) {
@@ -70,8 +70,6 @@ void assembled_chunk::set_time(long unsigned int time) {
 }
 
 void assembled_chunk::set_data(int i, unsigned char x) {
-	//assert(i < constants::chunk_size * constants::nfreq);
-	//assert(i >= 0);
 	data[i] = x;
 }
 
@@ -94,15 +92,18 @@ vdif_processor::vdif_processor(int id, bool flag){
 		intensity_buf = new int[constants::nfreq+32];
 	}
 
+	fft_buf = new float[constants::nsample_integrate * constants::nfreq];
+
 	CPU_ZERO(&p_cpuset);
-	CPU_SET(p_id * 2 + 3, &p_cpuset);
+	CPU_SET(p_id + 1, &p_cpuset);
 }
 
 vdif_processor::~vdif_processor(){
+	delete[] fft_buf;
 	delete[] temp_buf;
 	delete[] intensity_buf;
 	delete processor_chunk;
-}
+}	
 
 void vdif_processor::process_chunk(int *intensity, int index, char &mask) {
 	
@@ -129,9 +130,16 @@ void vdif_processor::process_chunk(int *intensity, int index, char &mask) {
 
 	for (int i = 0; i < constants::nt; i++) {
 		if (upch) {
-			
-			//upchannelize(constants::nsample_integrate, constants::nfreq + 32, constants::nfft, processor_chunk->data + i * constants::nsample_integrate * (constants::nfreq+32));
-			
+			/*
+			upchannelize_square_sum(constants::nsample_integrate, constants::nfreq + 32, constants::nfft, processor_chunk->data + i * constants::nsample_integrate * (constants::nfreq+32),fft_buf, p);
+			for (int j = 0; j < constants::nfreq * constants::nfft; j++) {
+				intensity_buf[j + 32 * constants::nfft] = 0;
+				for (int k = 0; k < constants::nsample_integrate / constants::nfft; k++) {
+					intensity_buf[j + 32 * constants::nfft] += (int) fft_buf[(j + 32 * constants::nfft) + (k * constants::nfreq + 32)  * constants::nfft];
+				}
+				intensity[j * constants::nt + i] = intensity_buf[j + 32 * constants::nfft];
+			}
+		*/	
 		} else {
 			u4_square_and_sum(constants::nsample_integrate, constants::nfreq + 32, processor_chunk->data + i * constants::nsample_integrate * (constants::nfreq+32), temp_buf, intensity_buf);
 			for (int j = 0; j < constants::nfreq; j++) {
@@ -144,10 +152,9 @@ void vdif_processor::process_chunk(int *intensity, int index, char &mask) {
 
 	cout << "Processing chunk done." << endl;
 
-	unique_lock<mutex> lk3(mtx3);
- 
+ 	unique_lock<mutex> lk3(mtx3);
 	mask = mask | (1 << index);
-	
+	cv[p_id].notify_one();
 	lk3.unlock();
 
 	unique_lock<mutex> lk2(mtx2);
@@ -155,7 +162,6 @@ void vdif_processor::process_chunk(int *intensity, int index, char &mask) {
 	lk2.unlock();
 
 }
-
 
 vdif_assembler::vdif_assembler(const char *arg1, const char *arg2, bool flag1, bool flag2, int n){
 	number_of_processors = n;
@@ -181,13 +187,28 @@ vdif_assembler::vdif_assembler(const char *arg1, const char *arg2, bool flag1, b
 		processors[i] = new vdif_processor(i, flag1);
 	}
 
+	if (upch) {
+		fftw_complex *in, *out;
+		in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * constants::nfft);
+		out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * constants::nfft);
+		p = fftw_plan_dft_1d(constants::nfft, in, out, FFTW_FORWARD, FFTW_MEASURE);
+		fftw_free(in);fftw_free(out);
+	}
+
+
 	bufsize = 0; p_index = 0;
 
 	chunk_count = 0;
 	i_start_index = 0; i_end_index = 0;
 	processor_threads = new thread[number_of_processors];
+	cv = new condition_variable[number_of_processors];
+
+	if (upch) {
+		constants::intensity_chunk_size *= 16;
+		constants::intensity_buffer_size *= 16; 
+	}
 	intensity_buffer = new int[constants::intensity_buffer_size];
-	intensity_buffer_mask = 0;
+	job_list = new int[number_of_processors];
 
         output = fopen("test.dat","w");
         if (!output) {
@@ -195,7 +216,6 @@ vdif_assembler::vdif_assembler(const char *arg1, const char *arg2, bool flag1, b
                 exit(10);
         }
 	write_to_disk = flag2;
-
 
 
 }
@@ -292,34 +312,40 @@ void vdif_assembler::get_intensity_chunk(float *intensity, ssize_t stride) {
 
 	for (;;) {
 		unique_lock<mutex> lk3(mtx3);		
-		if (intensity_buffer_mask & (1 << i_start_index)) {
-
-			for (int i = 0; i < constants::nt; i++ ) {
-				for (int j = 0; j < constants::nfreq; j++) {
-		
-				intensity[i*stride + j] = intensity_buffer[i_start_index * constants::intensity_chunk_size + i * constants::nfreq + j];
-				
-				}
-			}
-			chunk_count++;
-			if (write_to_disk) {	
-				fwrite(intensity_buffer + i_start_index * constants::intensity_chunk_size, sizeof(int), constants::intensity_chunk_size, output);
-                        	cout << "Writing chunk " << chunk_count << " to test.dat..." << endl;
-			}
-			
-			intensity_buffer_mask = intensity_buffer_mask ^ (1 << i_start_index);
-			perf = chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now() - start).count();
-			cout << perf << "ms" <<endl;
-			start = chrono::steady_clock::now();
-			tot_perf += perf;
-			avg_perf = tot_perf / chunk_count;
-			cout << "Average performance: " << avg_perf << "ms" << endl;
-			lk3.unlock();
-			cout << "Finish assembling chunk " << chunk_count << ", sending to bonsai..." << endl;
-			i_start_index = (i_start_index + 1) % constants::max_chunks;
-			break;
+		if (!(intensity_buffer_mask & (1 << i_start_index))) {
+			cv[job_list[i_start_index]].wait(lk3);
 		}
+		
+
+		for (int i = 0; i < constants::nt; i++ ) {
+			for (int j = 0; j < constants::nfreq; j++) {
+		
+			intensity[i*stride + j] = intensity_buffer[i_start_index * constants::intensity_chunk_size + i * constants::nfreq + j];
+				
+			}
+		}
+		chunk_count++;
+
+		if (write_to_disk) {	
+			fwrite(intensity_buffer + i_start_index * constants::intensity_chunk_size, sizeof(int), constants::intensity_chunk_size, output);
+                        cout << "Writing chunk " << chunk_count << " to test.dat..." << endl;
+		}
+		intensity_buffer_mask = intensity_buffer_mask ^ (1 << i_start_index);	
+		
 		lk3.unlock();
+
+		perf = chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now() - start).count();
+		cout << perf << "ms" <<endl;
+		start = chrono::steady_clock::now();
+		tot_perf += perf;
+		avg_perf = tot_perf / chunk_count;
+		cout << "Average performance: " << avg_perf << "ms" << endl;
+		cout << "Finish assembling chunk " << chunk_count << ", sending to bonsai..." << endl;
+
+		i_start_index = (i_start_index + 1) % constants::max_chunks;
+
+		break;
+		
 	}
 
 
@@ -394,6 +420,8 @@ void vdif_assembler::assign_chunk() {
         processor_threads[p_index] = thread(&vdif_processor::process_chunk,processors[p_index],intensity_buffer+i_end_index*constants::intensity_chunk_size,i_end_index,ref(intensity_buffer_mask));
         processors[p_index]->is_running = true;
         processor_threads[p_index].detach();
+
+	job_list[i_end_index] = p_index;
 
         i_end_index = (i_end_index + 1) % constants::max_chunks;
         bufsize = 0;

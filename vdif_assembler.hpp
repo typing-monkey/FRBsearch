@@ -32,14 +32,13 @@ struct vdif_processor {
 	cpu_set_t p_cpuset;	
 
 	int *temp_buf, *intensity_buf;
+	float *fft_buf;
 
 	vdif_processor(int id, bool flag);
 	~vdif_processor();
 	void process_chunk(int *intensity, int index, char &mask);
 
 };
-
-
 
 struct vdif_assembler {
 
@@ -58,6 +57,8 @@ struct vdif_assembler {
 	
 	int *intensity_buffer;
 	char intensity_buffer_mask;
+
+	int *job_list;
 	
 	vdif_processor **processors;
 	thread *processor_threads;

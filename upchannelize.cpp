@@ -1,33 +1,51 @@
-#include <fftw3.h>
 #include <iostream>
-#include <math.h>
+#include <ipp.h>
 
-using namespace std;
+void upchannelize(int nt, int nfreq, int size, unsigned char *data, unsigned char *buf) {
+	int order = (int)(log((double)size / log(2.0)));
+	IppsFFTSpec_C_8sc *pFFTSpec = 0;
+	Ipp8u *pFFTSpecBuf, *pFFTInitBuf, *pFFTWorkBuf;
+	
+	Ipp8sc *pSrc = ippsMalloc_8sc(size);
+	Ipp8sc *pDst = ippsMalloc_8sc(size);
 
-void upchannelize_square_sum(int nsample, int N, unsigned char *data,fftwf_complex *in, fftwf_complex *out, fftwf_plan &p) {
-	
-	if (nsample % N) {
-		cout << "Number of samples to FFT must evenly divide FFT size." << endl;
-		exit(10);
-	}
-	
-	//p = fftwf_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
-	for (int i = 0; i < nsample / N; i++) {
-		for (int j = 0; j < N; j++) {
-			in[j][0] = float((data[i * 16 + j] >> 4) - 8);
-			in[j][1] = float((data[i * 16 + j] & 0xF) - 8);
-			if (isnan(in[j][0])) {
-				cout << in[j][0] << endl;
+	int sizeFFTSpec, sizeFFTInitBuf, sizeFFTWorkBuf;
+	ippsFFTGetSize_C_8sc(order, IPP_FFT_DIV_FWD_BY_N, ippAlgHintAccurate, &sizeFFTSpec, &sizeFFTInitBuf, &sizeFFTWorkBuf);
+
+	pFFTSpecBuf = ippsMalloc_8u(sizeFFTSpec);
+	pFFTInitBuf = ippsMalloc_8u(sizeFFTInitBuf);
+	pFFTWorkBuf = ippsMalloc_8u(sizeFFTWorkBuf);
+
+	ippsFFTInit_C_8sc(&pFFTSpec, order, IPP_FFT_DIV_FWD_BY_N, ippAlgHintAccurate, pFFTSpecBuf, pFFTInitBuf);
+	if (pFFTInitBuf) ippFree(pFFTInitBuf);
+
+	for (int i = 0; i < (nt/size/2); i++) {
+
+		for (int j = 0; j < nfreq) {
+			for (int k = 0; k < size; k++) {
+				pSrc[k].re = ((data[i * size * nfreq * 2 + k * 2 * nfreq + j] >> 4) & 0xf) - 8;
+				pSrc[k].im = (data[i * size * nfreq * 2 + k * 2 * nfreq + j] & 0xf) - 8;
 			}
-			if (isnan(in[j][1])) {
-				cout << in[j][1] << endl;
+			ippsFFTFwd_CToC_8sc(pSrc, pDst, pFFTSpec, pFFTWorkBuf);
+			for (int k = 0; k < size; k++) {
+				*buf = (((pSrc[k].re + 8) & 0xf) << 4) + (pSrc[k].im & 0xf) + 8;
+				buf++;
+			}
+			for (int k = 0; k < size; k++) {
+				pSrc[k].re = ((data[i * size * nfreq * 2 + (k * 2 + 1) * nfreq + j] >> 4) & 0xf) -8;
+				pSrc[k].im = (data[i * size * nfreq * 2 + (k * 2 + 1) * nfreq + j] & 0xf) - 8;
+			}
+			ippsFFTFwd_CToC_8sc(pSrc, pDst, pFFTSpec, pFFTWorkBuf);
+			for (int k = 0; k < size; k++) {
+				*buf = (((pSrc[k].re + 8) & 0xf) << 4) + (pSrc[k].im & 0xf) + 8;
+				buf++;
 			}
 		}
-		fftwf_execute_dft(p, in, out);
-		for (int j = 0; j < N; j++) {
-			data[nsample / N*j + i] = (unsigned char)((int(round(out[j][0] / N)) << 4) + (int(round(out[j][1] / N))));
-		}
 	}
 
-	//fftwf_destroy_plan(p);
+	if (pFFTWorkBuf) ippFree(pFFTWorkBuf);
+	if (pFFTSpecBuf) ippFree(pFFTSpecBuf);
+	ippFree(pSrc);
+	ippFree(pDst);
+
 }

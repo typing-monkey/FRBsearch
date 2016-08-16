@@ -19,6 +19,8 @@ int main(int argc, char *argv[]) {
 	double dt_sample = 9.8304e-4;
 
 	if (strcmp("-u",argv[3])==0) {
+		cout << "Upchannelization is not implemented yet." << endl;
+		exit(10);
 		cout << "Upchannelization enabled." << endl;
 		up = true;
 	}
