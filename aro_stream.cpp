@@ -21,6 +21,8 @@ public:
 		this->freq_hi_MHz = freq_hi_MHz_;
 		this->dt_sample = dt_sample_;	
 		this->nt_maxwrite = 1024;
+		
+		//initialize vdif_assembler here
 		assembler = new vdif_assembler(arg1, arg2, flag1, flag2, n);
 
 		buf = new int[nfreq * nt_maxwrite];
@@ -44,13 +46,11 @@ public:
 			run_state.setup_write(nt_maxwrite, intensity, weights, stride, zero_flag);
 			
 			assembler->get_intensity_chunk(intensity,stride);
-		
+			
+			//initialize weight to 1.0
 			for (int i = 0; i < nfreq; i++) {
 				for (int j = 0; j < nt_maxwrite; j++) {		
-					
-					//intensity[i*stride + j] = buf[i*nfreq+j];
 					weights[i*stride + j] = 1.0;
-					
 				}
 			}
 			//cout << "Bonsai received a chunk." << endl;

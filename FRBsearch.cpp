@@ -30,12 +30,13 @@ int main(int argc, char *argv[]) {
 		write = true;
 	}
 
+	//this enables aro stream
 	shared_ptr<wi_stream> stream = make_shared<aro_stream>(nfreq,freq_lo_MHz,freq_hi_MHz,dt_sample, argv[1], argv[2], up, write, n);
 
 	vector<shared_ptr<wi_transform>> transform_list;
 	
-	string bonsai_config_filename = "bonsai_config.hdf5";
-	string bonsai_output_filename = "bonsai_outputs.hdf5";	
+	string bonsai_config_filename = "bonsai_config.hdf5";	//configuration filename
+	string bonsai_output_filename = "bonsai_outputs.hdf5";	//output filename
 	int nt_per_file = 16384;
 
 	//rfi filters
@@ -52,6 +53,7 @@ int main(int argc, char *argv[]) {
 	shared_ptr<wi_transform> r_c = shared_ptr<wi_transform>(new remove_continuum());
 	shared_ptr<wi_transform> r_nf2 = shared_ptr<wi_transform>(new remove_noisy_freq(3.0));
 
+	//RFI filters, un-comment them to enable
 	/*
 	transform_list.push_back(stb);
 	transform_list.push_back(r_o1);
@@ -66,9 +68,5 @@ int main(int argc, char *argv[]) {
 
 	stream->run(transform_list);
 
-	//vdif_assembler a(argv[1],argv[2],up,n);
-	//vdif_processor p[n];
-	
-	//a.run();
 }
 
