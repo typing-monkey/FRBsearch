@@ -104,8 +104,7 @@ vdif_processor::~vdif_processor(){
 	delete processor_chunk;
 }
 
-void vdif_processor::process_chunk(int *intensity, int index, char &mask) {
-	
+void vdif_processor::process_chunk(int *intensity, int index, char*mask_ptr) {
 	sched_setaffinity(0, sizeof(cpu_set_t), &p_cpuset);	
 
 	int seconds,frames;
@@ -145,8 +144,11 @@ void vdif_processor::process_chunk(int *intensity, int index, char &mask) {
 	cout << "Processing chunk done." << endl;
 
 	unique_lock<mutex> lk3(mtx3);
- 
-	mask = mask | (1 << index);
+ 	
+	// cout << (int) *mask_ptr << endl;
+	*mask_ptr = *mask_ptr | (1 << index);
+	// cout << (int) *mask_ptr << endl;
+	// cout << "----------" << endl;
 	
 	lk3.unlock();
 
@@ -289,11 +291,12 @@ void vdif_assembler::intensity_streamformer() {
 }
 */
 void vdif_assembler::get_intensity_chunk(float *intensity, ssize_t stride) {
-
+	cout << "get_intensity_chunk called!" << endl;
 	for (;;) {
-		unique_lock<mutex> lk3(mtx3);		
+		unique_lock<mutex> lk3(mtx3);
+		//cout << (int) intensity_buffer_mask << endl;	
 		if (intensity_buffer_mask & (1 << i_start_index)) {
-
+			cout << "passed if" << endl;
 			for (int i = 0; i < constants::nt; i++ ) {
 				for (int j = 0; j < constants::nfreq; j++) {
 		
@@ -390,8 +393,10 @@ void vdif_assembler::assemble_chunk() {
 void vdif_assembler::assign_chunk() {
 
 	cout << "Assigned to processor: " << p_index << endl;
-
-        processor_threads[p_index] = thread(&vdif_processor::process_chunk,processors[p_index],intensity_buffer+i_end_index*constants::intensity_chunk_size,i_end_index,ref(intensity_buffer_mask));
+	unique_lock<mutex> lk3(mtx3);
+        processor_threads[p_index] = thread(&vdif_processor::process_chunk,processors[p_index],intensity_buffer+i_end_index*constants::intensity_chunk_size,i_end_index,&intensity_buffer_mask);
+        //cout << (int) intensity_buffer_mask << endl;
+        lk3.unlock();
         processors[p_index]->is_running = true;
         processor_threads[p_index].detach();
 
@@ -436,10 +441,13 @@ void vdif_assembler::network_capture() {
 	}
 	server_address.sin_family = AF_INET;
 	server_address.sin_port = htons(port);
-	server_address.sin_addr.s_addr = inet_addr("127.0.0.1");
+	char* addr = "127.0.0.1";
+	server_address.sin_addr.s_addr = inet_addr(addr);
+	cout << "attempting to bind to " << addr << ":" << port <<endl;
 	if (bind(sock_fd, (struct sockaddr *) &server_address, sizeof(server_address)) < 0) {
 		cout << "bind failed." << std::endl;
 	}
+	cout << "bind successful" << endl;
 	
 	for (;;) {
 		if (read(sock_fd, (processors[p_index]->processor_chunk->data) + bufsize * 1056, size) == size) {

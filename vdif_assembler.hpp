@@ -1,5 +1,7 @@
 #include <iostream>
 #include <stdlib.h>
+#include <rf_pipelines.hpp>
+#include <thread>
 
 using namespace std;
 using namespace rf_pipelines;
@@ -35,7 +37,7 @@ struct vdif_processor {
 
 	vdif_processor(int id, bool flag);
 	~vdif_processor();
-	void process_chunk(int *intensity, int index, char &mask);
+	void process_chunk(int *intensity, int index, char* mask);
 
 };
 
