@@ -39,19 +39,19 @@ int main(int argc, char *argv[]) {
 	string bonsai_output_filename = "bonsai_outputs.hdf5";	//output filename
 	int nt_per_file = 16384;
 
-	//rfi filters
+	// //rfi filters
+	
+	// shared_ptr<wi_transform> stb = shared_ptr<wi_transform>(new sys_temperature_bandpass());
+	// shared_ptr<wi_transform> r_o1 = shared_ptr<wi_transform>(new remove_outliers(5.0));
+	// //insert hp_filter here
 
-	shared_ptr<wi_transform> stb = shared_ptr<wi_transform>(new sys_temperature_bandpass());
-	shared_ptr<wi_transform> r_o1 = shared_ptr<wi_transform>(new remove_outliers(5.0));
-	//insert hp_filter here
-
-	double hpf_width = 0.2;
-	shared_ptr<wi_transform> hpf = shared_ptr<wi_transform>(new highpass_filter((int) hpf_width/dt_sample));
-	shared_ptr<wi_transform> r_o2 = shared_ptr<wi_transform>(new remove_outliers(5.0));
-	shared_ptr<wi_transform> r_nf1 = shared_ptr<wi_transform>(new remove_noisy_freq(3.0));
-	shared_ptr<wi_transform> r_bt = shared_ptr<wi_transform>(new remove_bad_times(2.0));
-	shared_ptr<wi_transform> r_c = shared_ptr<wi_transform>(new remove_continuum());
-	shared_ptr<wi_transform> r_nf2 = shared_ptr<wi_transform>(new remove_noisy_freq(3.0));
+	// double hpf_width = 0.2;
+	// shared_ptr<wi_transform> hpf = shared_ptr<wi_transform>(new highpass_filter((int) hpf_width/dt_sample));
+	// shared_ptr<wi_transform> r_o2 = shared_ptr<wi_transform>(new remove_outliers(5.0));
+	// shared_ptr<wi_transform> r_nf1 = shared_ptr<wi_transform>(new remove_noisy_freq(3.0));
+	// shared_ptr<wi_transform> r_bt = shared_ptr<wi_transform>(new remove_bad_times(2.0));
+	// shared_ptr<wi_transform> r_c = shared_ptr<wi_transform>(new remove_continuum());
+	// shared_ptr<wi_transform> r_nf2 = shared_ptr<wi_transform>(new remove_noisy_freq(3.0));
 
 	//RFI filters, un-comment them to enable
 	/*
